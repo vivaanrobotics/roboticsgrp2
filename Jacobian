@@ -21,3 +21,4 @@ J=zeros(2, N);
      %J21, J22];
 J= [-r1*sin(t1+t2), -r2 *sin(t1+t2);
     r1*cos(t1) + r2 * cos(t1+t2), r2 * cos(t1+ t2)]
+end
