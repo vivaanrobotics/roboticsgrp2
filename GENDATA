@@ -1,0 +1,117 @@
+// 定义脉冲数（PPR）和减速比（GR）的常量
+const float PPR1 = 601.1077;
+const float PPR2 = 3575.0855;
+const float GR1 = 50.092;
+const float GR2 = 297.924;
+const float CPR = 3; // 每转的循环数
+
+// 用于跟踪编码器位置和速度的变量
+volatile long counter_m1 = 0, counter_m2 = 0;
+
+// 定义编码器和电机的引脚
+const int encoderPinA_m1 = 2, encoderPinB_m1 = 10;
+const int encoderPinA_m2 = 3, encoderPinB_m2 = 11;
+const int motorPin1_m1 = 4, motorPin2_m1 = 5, enablePin_m1 = 6;
+const int motorPin1_m2 = 7, motorPin2_m2 = 8, enablePin_m2 = 9;
+
+// PID 增益
+float Kp_m1 = 16, Ki_m1 = 0, Kd_m1 = 0.5;
+float Kp_m2 = 24, Ki_m2 = 0, Kd_m2 = 0.5;
+
+// 定位和需求
+float demandPositionInDegrees_m1 = 0, demandPositionInDegrees_m2 = 0;
+float currentPositionInDegrees_m1 = 0, currentPositionInDegrees_m2 = 0;
+
+// MATLAB 通信
+String matlabStr = "";
+bool readyToSend = false;
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(encoderPinA_m1, INPUT_PULLUP);
+  pinMode(encoderPinB_m1, INPUT_PULLUP);
+  pinMode(encoderPinA_m2, INPUT_PULLUP);
+  pinMode(encoderPinB_m2, INPUT_PULLUP);
+  pinMode(motorPin1_m1, OUTPUT);
+  pinMode(motorPin2_m1, OUTPUT);
+  pinMode(enablePin_m1, OUTPUT);
+  pinMode(motorPin1_m2, OUTPUT);
+  pinMode(motorPin2_m2, OUTPUT);
+  pinMode(enablePin_m2, OUTPUT);
+
+  attachInterrupt(digitalPinToInterrupt(encoderPinA_m1), updateEncoder_m1, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(encoderPinA_m2), updateEncoder_m2, CHANGE);
+}
+
+void loop() {
+  readMATLABCommand();  // 读取来自 MATLAB 的命令
+  controlMotors();      // 控制电机
+  sendDataToMATLAB();   // 将数据发送给 MATLAB
+}
+
+// 读取 MATLAB 的命令
+void readMATLABCommand() {
+  while (Serial.available() > 0) {
+    char c = Serial.read();
+    matlabStr += c;
+
+    if (matlabStr.indexOf(";") != -1) {
+      int posComma = matlabStr.indexOf(",");
+      demandPositionInDegrees_m1 = matlabStr.substring(1, posComma).toFloat();
+      demandPositionInDegrees_m2 = matlabStr.substring(posComma + 1, matlabStr.indexOf(";")).toFloat();
+      matlabStr = ""; // 清空命令缓冲区
+    }
+  }
+}
+
+// 使用 PID 控制电机
+void controlMotors() {
+  currentPositionInDegrees_m1 = ((counter_m1 * 360) / (CPR * GR1 * 2));
+  currentPositionInDegrees_m2 = ((counter_m2 * 360) / (CPR * GR2 * 2));
+
+  float error_m1 = demandPositionInDegrees_m1 - currentPositionInDegrees_m1;
+  float output_m1 = Kp_m1 * error_m1;
+
+  float error_m2 = demandPositionInDegrees_m2 - currentPositionInDegrees_m2;
+  float output_m2 = Kp_m2 * error_m2;
+
+  // 缩放因子来降低速度
+  float speedScaleFactor = 0.1; // 0.5 表示减慢一半的速度
+  output_m1 *= speedScaleFactor;
+  output_m2 *= speedScaleFactor;
+
+  controlMotor(motorPin1_m1, motorPin2_m1, enablePin_m1, output_m1);
+  controlMotor(motorPin1_m2, motorPin2_m2, enablePin_m2, output_m2);
+}
+
+// 将数据发送到 MATLAB
+void sendDataToMATLAB() {
+  Serial.print("c");
+  Serial.print(currentPositionInDegrees_m1);
+  Serial.print(",");
+  Serial.print(currentPositionInDegrees_m2);
+  Serial.println();
+}
+
+// 控制电机的函数
+void controlMotor(int pin1, int pin2, int enablePin, float output) {
+  if (output > 0) {
+    digitalWrite(pin1, HIGH);
+    digitalWrite(pin2, LOW);
+    analogWrite(enablePin, constrain(output, 0, 255));
+  } else {
+    digitalWrite(pin1, LOW);
+    digitalWrite(pin2, HIGH);
+    analogWrite(enablePin, constrain(-output, 0, 255));
+  }
+}
+
+// 更新编码器的函数
+void updateEncoder_m1() {
+  counter_m1 += (digitalRead(encoderPinB_m1) == digitalRead(encoderPinA_m1)) ? 1 : -1;
+}
+
+void updateEncoder_m2() {
+  counter_m2 += (digitalRead(encoderPinB_m2) == digitalRead(encoderPinA_m2)) ? 1 : -1;
+}
