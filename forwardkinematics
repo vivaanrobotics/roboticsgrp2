@@ -1,0 +1,16 @@
+function [T] = forward_kinematicsfinal(r1, r2, t1, t2)
+    % Inputs: r1, r2 are link lengths; t1, t2 are angles in degrees.
+    
+    % Calculate the position of the end-effector using degrees
+    x = r1 * cosd(t1) + r2 * cosd(t1 + t2);  % Use cosd for degrees
+    y = r1 * sind(t1) + r2 * sind(t1 + t2);  % Use sind for degrees
+    
+    % Orientation of the end-effector in degrees
+    theta = t1 + t2;  % Resultant orientation
+    
+    % Homogeneous transformation matrix with degrees
+    T = [cosd(theta), -sind(theta), 0, x;
+         sind(theta),  cosd(theta), 0, y;
+         0,            0,           1, 0;
+         0,            0,           0, 1];
+end
